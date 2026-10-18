@@ -51,12 +51,17 @@ Tab Locking, you can lock tabs, forcing them to always be visible while you scro
   - config_tab: Enables the config tab next to the left arrow tab, used to lock/unlock tabs and perform some very minor tab operations, default True
   - debug_mode: Enables some very minor debug information on the config tab, may be useful for building the app, Default False
 
+- Custom Functions
+  - Theres actually a bunch of custom functions, most of which are probably not needed. But here is the important ones.
+  - Lock/Unlock tabs with notebook.lock_tab or notebook._unlocked_tabs(tab_id) and selected_id = notebook.select()
+  - Change the lock/unlock icon, notebook.set_lock_icon(string) and notebook.set_unlock_icon(string)
+  - Set status emoji status emoji, notebook.set_tab_status(tab_id, string) or notebook.get_tab_status(tab_id)
+
 ## TODO:
 - SkiEntry, SkiText, SkiCombo: Need to add a "Cut" option to the right-click menu.
-- SkiNotebook: I need to expose the locking/unlocking tabs to the user for outside class use.
-- SkiNotebook: I need to change the way some functions get the name, so we always return the true name and not with the lock emoji.
-- SkiNotebook: I need to make the lock emoji a user set "string" option.
-- SkiNotebook: I need to make add more options to configure the color theme for internal widgets.
+- SkiNotebook: May have some unknown issues. Still needs a lot of testing. Seems to be working in my test app.
+- SkiNotebook: Issues with starting up and having less tabs initially configured when auto_max_tabs is true and more tabs can be visible. They start hidden when they can clearly be displayed. Nearly any tab action will make them visible again or shrink/grow the tab space.
+- SkiNotebook: Issues with using -> arrow when tabs are being hidden and auto_max_tabs is true, when more tabs can be shown. This will hide the first tab, until you add more tabs to show the <-/-> arrows again and use them, or shrink the tab space.
 
 ## More to do:
 Im sure there is functionality that I missed in some of these widget replacements. If you have suggestions please let me know. Although I feel like most suggestions will be specific to your project, I am open to hear about it. And even if I dont add your specific use case, I may add the hooks in that you use to allow further customization to the widgets.

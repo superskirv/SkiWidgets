@@ -1,6 +1,13 @@
 import tkinter as tk
 from tkinter import ttk, font
 
+# Use these special widgets as drop in replacements for the tk widget they are.
+# class SkiEntry(tk.Entry)
+# class SkiText(tk.Text)
+# class SkiCombobox(ttk.Combobox)
+# class SkiScale(tk.Scale) #Basically...
+# class SkiNotebook(ttk.notebook) #Basically...
+
 class SkiEntry(tk.Entry):
     """Simple Entry widget with undo/redo and auto-closing context menu."""
     
@@ -649,7 +656,7 @@ class SkiCombobox(ttk.Combobox):
         super().destroy()
 
 class SkiScale(ttk.Frame):
-    VERSION = "1.3"
+    VERSION = "1.31"
 
     def __init__(self, parent, **kwargs):
         import time
@@ -662,16 +669,11 @@ class SkiScale(ttk.Frame):
         self._show_entry = kwargs.pop('show_entry', True)
 
         # Standard Scale options
-        if 'from' in kwargs:
-            self._min_value = float(kwargs.pop('from'))
-        elif 'from_' in kwargs:
-            self._min_value = float(kwargs.pop('from_'))
-        else:
-            self._min_value = 0.0
-
+        self._min_value = float(kwargs.pop('from_'))
         self._max_value = float(kwargs.pop('to', 100))
+
         self._orient = kwargs.pop('orient', tk.HORIZONTAL)
-        self._length = int(kwargs.pop('length', 200))
+        self._length = int(kwargs.pop('length', 100))
         self._resolution = float(kwargs.pop('resolution', 1))
 
         # if self._resolution == 0:
@@ -1070,9 +1072,9 @@ class SkiNotebook(ttk.Frame):
       - ⚙ Config tab for debugging and user edits.
     """
 
-    VERSION = "1.06"
+    VERSION = "1.07"
 
-    def __init__(self, parent=None, max_tabs_visible=5, config_tab=False, auto_max_tabs=True, debug_mode=False, **kwargs):
+    def __init__(self, parent=None, max_tabs_visible=5, config_tab=False, auto_max_tabs=True, debug_mode=False, lock_icon="🔒", unlock_icon="", status_icon="", **kwargs):
         super().__init__(parent, **kwargs)
         self.configure(padding=0)
 
@@ -1084,6 +1086,11 @@ class SkiNotebook(ttk.Frame):
         self._config_tab_enabled = bool(config_tab)
         self._auto_max_tabs = bool(auto_max_tabs)
         self._debug_mode = bool(debug_mode)
+
+        # Customizable icons
+        self._lock_icon = str(lock_icon)
+        self._unlock_icon = str(unlock_icon)
+        self._status_icon = str(status_icon)
 
         # Configurable guess values for auto calculation
         self._tab_padding = 16
@@ -1108,9 +1115,7 @@ class SkiNotebook(ttk.Frame):
         self._tab_widths = {}
         self._debug_width_labels = {}
         
-        # ==========================================================================
-        # NEW: Font cache for performance - stores the detected font object
-        # ==========================================================================
+        # Font cache for performance
         self._cached_tab_font = None
         self._cached_font_name = None
 
@@ -1129,11 +1134,10 @@ class SkiNotebook(ttk.Frame):
         return list(self.notebook.tabs())
 
     def _recalculate_tab_width(self, tid):
-        """Recalculate and store the width for a single tab."""
+        """Recalculate and store the width for a single tab using FULL display name."""
         width = self._get_tab_label_width(tid)
         self._tab_widths[tid] = width
         
-        # If in debug mode, update the debug width label
         if self._debug_mode and tid in getattr(self, '_debug_width_labels', {}):
             self._debug_width_labels[tid].config(text=f"{width}px")
 
@@ -1147,13 +1151,10 @@ class SkiNotebook(ttk.Frame):
             total += width
         return total
 
-    # ==========================================================================
-    # AUTO MAX TABS CALCULATION
-    # ==========================================================================
-
     def _get_tab_label_width(self, tid):
-        """Get the pixel width of a tab's label text."""
+        """Get the pixel width of a tab's FULL display label text (including lock/status icons)."""
         try:
+            # Get the FULL display text as shown on the tab
             text = self.notebook.tab(tid, "text")
         except tk.TclError:
             return 0
@@ -1161,14 +1162,8 @@ class SkiNotebook(ttk.Frame):
         if not text:
             return 0
                 
-        # ==========================================================================
-        # Use dynamically detected font instead of hardcoded TkDefaultFont
-        # ==========================================================================
         font_obj = self._detect_tab_font()
-        
         width = font_obj.measure(text)
-        
-        # Use configurable padding instead of hardcoded value
         width += self._tab_padding
         
         return max(width, self._min_tab_width)
@@ -1182,15 +1177,11 @@ class SkiNotebook(ttk.Frame):
         if total_width <= 0:
             return 0
         
-        # Use configurable margin
         available = total_width - self._window_margin
         return max(available, 0)
 
     def _find_max_tabs_that_fit_from_start(self, start_index, user_tabs_only=True):
-        """
-        Starting from start_index, find how many consecutive tabs fit in available space.
-        Returns (count, total_width).
-        """
+        """Starting from start_index, find how many consecutive tabs fit in available space."""
         all_tabs = self._get_all_tabs_in_order()
         if start_index >= len(all_tabs):
             return (0, 0)
@@ -1202,7 +1193,6 @@ class SkiNotebook(ttk.Frame):
         for i in range(start_index, len(all_tabs)):
             tid = all_tabs[i]
             
-            # Skip special tabs if requested
             if user_tabs_only and self._is_special(tid):
                 continue
             
@@ -1217,10 +1207,7 @@ class SkiNotebook(ttk.Frame):
         return (count, total_width)
 
     def _recalculate_auto_max_tabs(self):
-        """
-        Recalculate max_tabs_visible by finding how many visible tabs fit.
-        Uses sliding window approach - doesn't use averages!
-        """
+        """Recalculate max_tabs_visible by finding how many visible tabs fit."""
         if not self._auto_max_tabs:
             return
         
@@ -1228,7 +1215,6 @@ class SkiNotebook(ttk.Frame):
         if available_space <= 0:
             return
         
-        # Get currently visible user tabs only (not hidden ones)
         unlocked = self._unlocked_tabs()
         locked_count = self._locked_count()
         room = max(self._max_tabs_visible - locked_count, 0)
@@ -1237,45 +1223,35 @@ class SkiNotebook(ttk.Frame):
         
         visible_unlocked = unlocked[start:end]
         
-        # Calculate total width of currently visible tabs ONLY
         total_visible_width = 0
         for tid in self._user_tabs:
             if self._is_locked(tid) or tid in visible_unlocked:
                 width = self._tab_widths.get(tid, self._get_tab_label_width(tid))
                 total_visible_width += width
         
-        # Count how many tabs are currently visible
         num_visible = locked_count + len(visible_unlocked)
         
         if num_visible > 0:
-            # Use average width of VISIBLE tabs only
             avg_visible_width = total_visible_width / num_visible
             tabs_that_fit = int(available_space / avg_visible_width)
         else:
             tabs_that_fit = self._max_tabs_visible
         
-        # Ensure minimum of 2
         calculated_max = max(tabs_that_fit, 2)
         
-        # Update max_tabs_visible (always, even if same)
         old_max = self._max_tabs_visible
         self._max_tabs_visible = calculated_max
         
-        # If we reduced max_tabs, we may need to clamp scroll position
         if calculated_max < old_max:
             self._clamp_unlock_scroll()
         
-        # ALWAYS apply visibility window after recalculation
         self._apply_visibility_window("AutoMaxRecalc")
         
-        # Update config UI if present
         if self._config_tab_enabled and hasattr(self, "_config_inner"):
             self._refresh_config_items()
 
     def _on_configure(self, event=None):
         """Handle window resize events - also clears font cache."""
-        # Invalidate font cache when window config changes
-        # (font settings might have been updated)
         self._cached_tab_font = None
         self._cached_font_name = None
         
@@ -1294,21 +1270,18 @@ class SkiNotebook(ttk.Frame):
         if tid is None:
             return None
 
-        # Known internal tab id?
         all_tabs = self.notebook.tabs()
         if tid in all_tabs:
             if not self._is_special(tid):
                 return tid
             return None
 
-        # Widget child -> tab via our mapping
         if tid in self._child_to_tab:
             candidate = self._child_to_tab[tid]
             if candidate in all_tabs and not self._is_special(candidate):
                 return candidate
             return None
 
-        # Integer index (including negative) -> notebook-level index
         if isinstance(tid, int):
             idx = tid
             n = len(all_tabs)
@@ -1320,7 +1293,6 @@ class SkiNotebook(ttk.Frame):
                     return real_tid
             return None
 
-        # Fallback: let ttk interpret it (string name/index), then validate
         try:
             idx = self.notebook.index(tid)
         except tk.TclError:
@@ -1359,22 +1331,230 @@ class SkiNotebook(ttk.Frame):
             self._tab_configs[tid] = {
                 "name": str(current_text or ""),
                 "locked": False,
+                "status": "",
             }
         self._apply_tab_label(tid)
         
-        # Recalculate width for new tab
         self._recalculate_tab_width(tid)
 
     def _apply_tab_label(self, tid):
+        """Apply the FULL display name to the tab (lock icon + base name + status)."""
         cfg = self._tab_configs.get(tid, {})
         name = cfg.get("name", "") or ""
         locked = bool(cfg.get("locked", False))
-        display = ("🔒" + name).rstrip() if locked else name
+        status = cfg.get("status", "") or ""
+        
+        # Build full display name: <lock_icon> + <base_name> + <status>
+        lock_prefix = self._lock_icon if locked else self._unlock_icon
+        display = f"{lock_prefix}{name}{status}".rstrip()
+        
         try:
             self.notebook.tab(tid, text=display)
         except tk.TclError:
             pass
-        # Width will be recalculated when needed via _get_tab_label_width
+
+    # ==========================================================================
+    # EXPOSED LOCK/UNLOCK FUNCTIONS (PUBLIC API)
+    # ==========================================================================
+
+    def lock_tab(self, tab_id):
+        """Lock a tab. Returns True if successful, False if max locks reached."""
+        tid = self._normalize_tab_id(tab_id)
+        if tid is None or self._is_special(tid):
+            return False
+        
+        cfg = self._tab_configs.setdefault(tid, {"name": "", "locked": False, "status": ""})
+        
+        if cfg["locked"]:
+            return True  # Already locked
+        
+        n_locked_now = self._locked_count()
+        if n_locked_now >= self._max_locks():
+            return False  # Max locks reached
+        
+        cfg["locked"] = True
+        self._apply_tab_label(tid)
+        self._clamp_unlock_scroll()
+        self._apply_visibility_window("LockChange")
+        
+        if self._auto_max_tabs:
+            self._recalculate_auto_max_tabs()
+            
+        if self._config_tab_enabled and hasattr(self, "_config_inner"):
+            self._refresh_config_items()
+            
+        return True
+
+    def unlock_tab(self, tab_id):
+        """Unlock a tab. Returns True if successful."""
+        tid = self._normalize_tab_id(tab_id)
+        if tid is None or self._is_special(tid):
+            return False
+        
+        cfg = self._tab_configs.setdefault(tid, {"name": "", "locked": False, "status": ""})
+        
+        if not cfg["locked"]:
+            return True  # Already unlocked
+        
+        cfg["locked"] = False
+        self._apply_tab_label(tid)
+        self._clamp_unlock_scroll()
+        self._apply_visibility_window("UnlockChange")
+        
+        if self._auto_max_tabs:
+            self._recalculate_auto_max_tabs()
+            
+        if self._config_tab_enabled and hasattr(self, "_config_inner"):
+            self._refresh_config_items()
+            
+        return True
+
+    def toggle_lock(self, tab_id):
+        """Toggle lock state of a tab. Returns new lock state."""
+        tid = self._normalize_tab_id(tab_id)
+        if tid is None or self._is_special(tid):
+            return False
+        
+        cfg = self._tab_configs.setdefault(tid, {"name": "", "locked": False, "status": ""})
+        
+        if cfg["locked"]:
+            self.unlock_tab(tid)
+            return False
+        else:
+            result = self.lock_tab(tid)
+            return result if result else False
+
+    # ==========================================================================
+    # EXPOSED SET NAME FUNCTION (PUBLIC API - sets base_name only)
+    # ==========================================================================
+
+    def set_tab_name(self, tab_id, name):
+        """Set the base name of a tab (without lock/status icons)."""
+        tid = self._normalize_tab_id(tab_id)
+        if tid is None or self._is_special(tid):
+            return False
+        
+        cfg = self._tab_configs.setdefault(tid, {"name": "", "locked": False, "status": ""})
+        cfg["name"] = str(name)
+        
+        self._apply_tab_label(tid)
+        self._recalculate_tab_width(tid)
+        
+        if self._debug_mode and tid in getattr(self, '_debug_width_labels', {}):
+            width = self._tab_widths.get(tid, 0)
+            self._debug_width_labels[tid].config(text=f"{width}px")
+            
+        if self._auto_max_tabs:
+            self._recalculate_auto_max_tabs()
+            
+        if self._config_tab_enabled and hasattr(self, "_config_inner"):
+            self._refresh_config_items()
+            
+        return True
+
+    def get_tab_name(self, tab_id):
+        """Get the base name of a tab (without lock/status icons)."""
+        tid = self._normalize_tab_id(tab_id)
+        if tid is None or self._is_special(tid):
+            return None
+        
+        cfg = self._tab_configs.get(tid, {})
+        return cfg.get("name", "")
+
+    # ==========================================================================
+    # EXPOSED SET STATUS FUNCTION (PUBLIC API)
+    # ==========================================================================
+
+    def set_tab_status(self, tab_id, status):
+        """Set the status indicator of a tab (appended to display name)."""
+        tid = self._normalize_tab_id(tab_id)
+        if tid is None or self._is_special(tid):
+            return False
+        
+        cfg = self._tab_configs.setdefault(tid, {"name": "", "locked": False, "status": ""})
+        cfg["status"] = str(status)
+        
+        self._apply_tab_label(tid)
+        self._recalculate_tab_width(tid)
+        
+        if self._debug_mode and tid in getattr(self, '_debug_width_labels', {}):
+            width = self._tab_widths.get(tid, 0)
+            self._debug_width_labels[tid].config(text=f"{width}px")
+            
+        if self._auto_max_tabs:
+            self._recalculate_auto_max_tabs()
+            
+        if self._config_tab_enabled and hasattr(self, "_config_inner"):
+            self._refresh_config_items()
+            
+        return True
+
+    def get_tab_status(self, tab_id):
+        """Get the status indicator of a tab."""
+        tid = self._normalize_tab_id(tab_id)
+        if tid is None or self._is_special(tid):
+            return None
+        
+        cfg = self._tab_configs.get(tid, {})
+        return cfg.get("status", "")
+
+    # ==========================================================================
+    # ICON CONFIGURATION (PUBLIC API)
+    # ==========================================================================
+
+    def set_lock_icon(self, icon):
+        """Set custom lock icon character."""
+        old_icon = self._lock_icon
+        self._lock_icon = str(icon)
+        
+        # Update all locked tabs' display
+        for tid in self._user_tabs:
+            if self._is_locked(tid):
+                self._apply_tab_label(tid)
+                self._recalculate_tab_width(tid)
+                
+        if self._auto_max_tabs:
+            self._recalculate_auto_max_tabs()
+            
+        return old_icon
+
+    def set_unlock_icon(self, icon):
+        """Set custom unlock icon character."""
+        old_icon = self._unlock_icon
+        self._unlock_icon = str(icon)
+        
+        # Update all unlocked tabs' display
+        for tid in self._user_tabs:
+            if not self._is_locked(tid):
+                self._apply_tab_label(tid)
+                self._recalculate_tab_width(tid)
+                
+        if self._auto_max_tabs:
+            self._recalculate_auto_max_tabs()
+            
+        return old_icon
+
+    def set_status_icon(self, icon):
+        """Set custom status icon character."""
+        old_icon = self._status_icon
+        self._status_icon = str(icon)
+        
+        if self._auto_max_tabs:
+            self._recalculate_auto_max_tabs()
+            
+        return old_icon
+
+    def get_lock_icon(self):
+        """Get current lock icon."""
+        return self._lock_icon
+
+    def get_unlock_icon(self):
+        """Get current unlock icon."""
+        return self._unlock_icon
+
+    def get_status_icon(self):
+        """Get current status icon."""
+        return self._status_icon
 
     # ==========================================================================
     # LOCK HELPERS
@@ -1400,7 +1580,6 @@ class SkiNotebook(ttk.Frame):
         all_tabs = self.notebook.tabs()
         self._left_arrow_id = all_tabs[-1] if all_tabs else raw_id
         self.notebook.hide(self._left_arrow_id)
-        # Store initial width
         self._recalculate_tab_width(self._left_arrow_id)
 
     def _create_config_tab(self):
@@ -1419,7 +1598,6 @@ class SkiNotebook(ttk.Frame):
         all_tabs = self.notebook.tabs()
         self._config_tab_id = all_tabs[-1] if all_tabs else raw_id
         self.notebook.hide(self._config_tab_id)
-        # Store initial width
         self._recalculate_tab_width(self._config_tab_id)
 
     def _ensure_right_arrow_at_end(self):
@@ -1436,7 +1614,6 @@ class SkiNotebook(ttk.Frame):
         self._right_arrow_id = all_tabs[-1] if all_tabs else None
         if self._right_arrow_id is not None:
             self.notebook.hide(self._right_arrow_id)
-            # Store initial width
             self._recalculate_tab_width(self._right_arrow_id)
 
     def _remove_right_arrow(self):
@@ -1455,17 +1632,15 @@ class SkiNotebook(ttk.Frame):
         for w in parent_frame.winfo_children():
             w.destroy()
 
-        # Get the current theme's background color
         bg_color = self._get_notebook_tab_background()
         
         canvas = tk.Canvas(parent_frame, 
                            highlightthickness=0,
-                           bg=bg_color,           # Set initial background
+                           bg=bg_color,
                            relief=tk.FLAT)
         
         scrollbar = ttk.Scrollbar(parent_frame, orient=tk.VERTICAL, command=canvas.yview)
         
-        # Use tk.Frame instead of ttk.Frame for full background control
         inner = tk.Frame(canvas, bg=bg_color)
 
         def on_frame_configure(event):
@@ -1481,8 +1656,8 @@ class SkiNotebook(ttk.Frame):
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y, padx=0, pady=0)
 
         self._config_inner = inner
-        self._config_canvas = canvas  # Store reference for color updates
-        self._config_parent = parent_frame  # Store parent for color updates
+        self._config_canvas = canvas
+        self._config_parent = parent_frame
         
         self._refresh_config_items()
 
@@ -1506,28 +1681,58 @@ class SkiNotebook(ttk.Frame):
             ttk.Label(debug_row, text=f"DEBUG: Available={available}px, Total tabs={total_width}px, Visible count={self._max_tabs_visible}", 
                      foreground="blue").pack(side=tk.LEFT, padx=0, pady=0)
             
-            # ==========================================================================
-            # FONT INFO (display detected font)
-            # ==========================================================================
             debug_row2 = ttk.Frame(self._config_inner)
             debug_row2.pack(fill=tk.X, padx=0, pady=0)
 
             font_obj = self._detect_tab_font()
             try:
-                # Get font name and size correctly
                 font_name = font_obj.actual()
-                font_size = font_obj.cget('size')  # <-- Fixed: use .cget('size'), not .size()
+                font_size = font_obj.cget('size')
                 font_info = f"Tab Font: {font_name} [{font_size}pt]"
             except tk.TclError:
                 font_info = f"Tab Font: {str(font_obj)}"
             
             ttk.Label(debug_row2, text=font_info, foreground="green").pack(side=tk.LEFT, padx=0, pady=0)
             
-            # Show cached status
             if self._cached_tab_font is not None:
                 ttk.Label(debug_row, text="[CACHED]", foreground="cyan").pack(side=tk.LEFT, padx=0, pady=0)
             else:
                 ttk.Label(debug_row, text="[MISS]", foreground="red").pack(side=tk.LEFT, padx=0, pady=0)
+
+        # ==========================================================================
+        # ICON SETTINGS GROUP (NEW - GLOBAL ICON CONFIGURATION)
+        # ==========================================================================
+        icon_settings_group = ttk.LabelFrame(self._config_inner, text="Icon Settings", padding=2)
+        icon_settings_group.pack(fill=tk.X, padx=0, pady=2)
+
+        icon_row = ttk.Frame(icon_settings_group)
+        icon_row.pack(fill=tk.X, padx=0, pady=2)
+
+        ttk.Label(icon_row, text="Lock Icon:").pack(side=tk.LEFT, padx=0, pady=0)
+        lock_icon_var = tk.StringVar(value=self._lock_icon)
+        
+        def on_lock_icon_changed(event=None):
+            new_icon = lock_icon_var.get().strip()
+            if new_icon:
+                self.set_lock_icon(new_icon)
+        
+        lock_icon_entry = SkiEntry(icon_row, textvariable=lock_icon_var, width=4)
+        lock_icon_entry.pack(side=tk.LEFT, padx=2, pady=0)
+        lock_icon_entry.bind("<Return>", on_lock_icon_changed)
+        lock_icon_entry.bind("<FocusOut>", on_lock_icon_changed)
+
+        ttk.Label(icon_row, text="Unlock Icon:").pack(side=tk.LEFT, padx=10, pady=0)
+        unlock_icon_var = tk.StringVar(value=self._unlock_icon)
+        
+        def on_unlock_icon_changed(event=None):
+            new_icon = unlock_icon_var.get().strip()
+            if new_icon:
+                self.set_unlock_icon(new_icon)
+        
+        unlock_icon_entry = SkiEntry(icon_row, textvariable=unlock_icon_var, width=4)
+        unlock_icon_entry.pack(side=tk.LEFT, padx=2, pady=0)
+        unlock_icon_entry.bind("<Return>", on_unlock_icon_changed)
+        unlock_icon_entry.bind("<FocusOut>", on_unlock_icon_changed)
 
         # ==========================================================================
         # AUTO MAX TABS SETTINGS GROUP (with border)
@@ -1535,7 +1740,6 @@ class SkiNotebook(ttk.Frame):
         auto_settings_group = ttk.LabelFrame(self._config_inner, text="Auto Max Tabs Settings", padding=2)
         auto_settings_group.pack(fill=tk.X, padx=0, pady=2)
 
-        # Row 1: Auto Max toggle and Tabs Visible
         row1 = ttk.Frame(auto_settings_group)
         row1.pack(fill=tk.X, padx=0, pady=2)
 
@@ -1547,8 +1751,6 @@ class SkiNotebook(ttk.Frame):
             self._auto_max_tabs = bool(auto_var.get())
             if self._auto_max_tabs:
                 self._recalculate_auto_max_tabs()
-            else:
-                pass
         
         auto_check = ttk.Checkbutton(row1, variable=auto_var, command=on_auto_changed)
         auto_check.pack(side=tk.LEFT, padx=5, pady=0)
@@ -1575,7 +1777,6 @@ class SkiNotebook(ttk.Frame):
         max_entry.bind("<Return>", on_max_changed)
         max_entry.bind("<FocusOut>", on_max_changed)
 
-        # Row 2: Tab Padding and Window Margin
         row2 = ttk.Frame(auto_settings_group)
         row2.pack(fill=tk.X, padx=0, pady=2)
 
@@ -1589,7 +1790,6 @@ class SkiNotebook(ttk.Frame):
                 return
             self._tab_padding = max(val, 0)
             tab_padding_var.set(str(self._tab_padding))
-            # Recalculate all widths since padding changed
             self._recalculate_all_tab_widths()
             if self._auto_max_tabs:
                 self._recalculate_auto_max_tabs()
@@ -1617,7 +1817,6 @@ class SkiNotebook(ttk.Frame):
         window_margin_entry.bind("<Return>", on_window_margin_changed)
         window_margin_entry.bind("<FocusOut>", on_window_margin_changed)
 
-        # Row 3: Min Tab Width
         row3 = ttk.Frame(auto_settings_group)
         row3.pack(fill=tk.X, padx=0, pady=2)
 
@@ -1631,7 +1830,6 @@ class SkiNotebook(ttk.Frame):
                 return
             self._min_tab_width = max(val, 10)
             min_width_var.set(str(self._min_tab_width))
-            # Recalculate all widths since min changed
             self._recalculate_all_tab_widths()
             if self._auto_max_tabs:
                 self._recalculate_auto_max_tabs()
@@ -1647,42 +1845,43 @@ class SkiNotebook(ttk.Frame):
         tab_settings_group = ttk.LabelFrame(self._config_inner, text="Tab Settings", padding=2)
         tab_settings_group.pack(fill=tk.X, padx=0, pady=2)
 
-        max_locks = self._max_locks()
-
         for idx, tid in enumerate(self._user_tabs):
-            cfg = self._tab_configs.get(tid, {"name": "", "locked": False})
+            cfg = self._tab_configs.get(tid, {"name": "", "locked": False, "status": ""})
             row = ttk.Frame(tab_settings_group)
             row.pack(fill=tk.X, padx=0, pady=2)
 
             name_var = tk.StringVar(value=cfg.get("name", ""))
+            status_var = tk.StringVar(value=cfg.get("status", ""))
             lock_state = bool(cfg.get("locked", False))
 
             ttk.Label(row, text=f"#{idx + 1}", width=3).pack(side=tk.LEFT, padx=0, pady=0)
             name_entry = SkiEntry(row, textvariable=name_var, width=16)
             name_entry.pack(side=tk.LEFT, padx=2, pady=0)
 
-            lock_btn = ttk.Button(row, text="🔒" if lock_state else "🔓", width=2)
+            lock_btn = ttk.Button(row, text=self._lock_icon if lock_state else self._unlock_icon, width=2)
             lock_btn.pack(side=tk.LEFT, padx=2, pady=0)
 
-            # NEW: Debug width display (only shown when debug_mode is True)
+            status_entry = SkiEntry(row, textvariable=status_var, width=4)
+            status_entry.pack(side=tk.LEFT, padx=2, pady=0)
+
             if self._debug_mode:
                 width_val = self._tab_widths.get(tid, 0)
                 width_label = ttk.Label(row, text=f"{width_val}px", width=6, foreground="gray")
                 width_label.pack(side=tk.LEFT, padx=2, pady=0)
-                self._debug_width_labels[tid] = width_label  # Store reference for updates
+                self._debug_width_labels[tid] = width_label
 
             def make_lock_callback(tid=tid, btn=lock_btn):
                 def cb():
-                    c = self._tab_configs.setdefault(tid, {"name": "", "locked": False})
+                    c = self._tab_configs.setdefault(tid, {"name": "", "locked": False, "status": ""})
                     if c["locked"]:
                         c["locked"] = False
-                        btn.config(text="🔓")
+                        btn.config(text=self._unlock_icon)
                     else:
                         n_locked_now = self._locked_count()
                         if n_locked_now >= self._max_locks():
                             return
                         c["locked"] = True
-                        btn.config(text="🔒")
+                        btn.config(text=self._lock_icon)
                     self._apply_tab_label(tid)
                     self._clamp_unlock_scroll()
                     self._apply_visibility_window("LockChange")
@@ -1693,12 +1892,10 @@ class SkiNotebook(ttk.Frame):
             def make_name_apply(name_var=name_var, tid=tid):
                 def cb(event=None):
                     new_name = name_var.get().strip()
-                    cfg = self._tab_configs.setdefault(tid, {"name": "", "locked": False})
+                    cfg = self._tab_configs.setdefault(tid, {"name": "", "locked": False, "status": ""})
                     cfg["name"] = new_name
                     self._apply_tab_label(tid)
-                    # Recalculate width for this tab
                     self._recalculate_tab_width(tid)
-                    # Update debug label if exists
                     if self._debug_mode and tid in getattr(self, '_debug_width_labels', {}):
                         width = self._tab_widths.get(tid, 0)
                         self._debug_width_labels[tid].config(text=f"{width}px")
@@ -1709,28 +1906,31 @@ class SkiNotebook(ttk.Frame):
             name_entry.bind("<Return>", make_name_apply())
             name_entry.bind("<FocusOut>", make_name_apply())
 
+            def make_status_apply(status_var=status_var, tid=tid):
+                def cb(event=None):
+                    new_status = status_var.get().strip()
+                    cfg = self._tab_configs.setdefault(tid, {"name": "", "locked": False, "status": ""})
+                    cfg["status"] = new_status
+                    self._apply_tab_label(tid)
+                    self._recalculate_tab_width(tid)
+                    if self._debug_mode and tid in getattr(self, '_debug_width_labels', {}):
+                        width = self._tab_widths.get(tid, 0)
+                        self._debug_width_labels[tid].config(text=f"{width}px")
+                    if self._auto_max_tabs:
+                        self._recalculate_auto_max_tabs()
+                return cb
+
+            status_entry.bind("<Return>", make_status_apply())
+            status_entry.bind("<FocusOut>", make_status_apply())
+
     def _detect_tab_font(self):
-        """
-        Detect the actual font being used by notebook tabs.
-        Returns a font object suitable for measuring text.
-        
-        Tries multiple strategies in order:
-          1. Widget's 'font' option
-          2. ttk style lookup for TNotebook.Tab
-          3. Fallback to TkDefaultFont
-        
-        Caches result for performance.
-        """
-        # Return cached font if available
+        """Detect the actual font being used by notebook tabs."""
         if self._cached_tab_font is not None:
             return self._cached_tab_font
         
         font_obj = None
         font_name = None
         
-        # ==========================================================================
-        # STRATEGY 1: Query the notebook widget's font option directly
-        # ==========================================================================
         try:
             font_name = self.notebook.cget('font')
             if font_name and isinstance(font_name, str) and font_name.strip():
@@ -1738,9 +1938,6 @@ class SkiNotebook(ttk.Frame):
         except tk.TclError:
             pass
         
-        # ==========================================================================
-        # STRATEGY 2: Query ttk style configuration for TNotebook.Tab element
-        # ==========================================================================
         if font_obj is None:
             try:
                 style_config = self.notebook.style.lookup("TNotebook.Tab", 'font', False)
@@ -1749,9 +1946,6 @@ class SkiNotebook(ttk.Frame):
             except Exception:
                 pass
         
-        # ==========================================================================
-        # STRATEGY 3: Try the tab's parent frame (self) font
-        # ==========================================================================
         if font_obj is None:
             try:
                 parent_font = self.cget('font')
@@ -1760,16 +1954,11 @@ class SkiNotebook(ttk.Frame):
             except tk.TclError:
                 pass
         
-        # ==========================================================================
-        # STRATEGY 4: Fall back to TkDefaultFont
-        # ==========================================================================
         if font_obj is None:
             font_obj = font.nametofont('TkDefaultFont')
         
-        # Cache the result
         self._cached_tab_font = font_obj
         
-        # Store font details for debugging
         try:
             self._cached_font_name = font_obj.actual()
         except tk.TclError:
@@ -1780,7 +1969,6 @@ class SkiNotebook(ttk.Frame):
     def _get_notebook_tab_background(self):
         """Get the background color for config tab."""
         try:
-            # Use the style object we created in __init__
             bg = self._style.lookup('TNotebook', 'background', False)
             if not bg or not bg.strip():
                 bg = self._style.lookup('TFrame', 'background', False)
@@ -1789,7 +1977,6 @@ class SkiNotebook(ttk.Frame):
         except tk.TclError:
             pass
         
-        # Safe fallback - always a valid Tkinter color
         return 'white'
 
     def _sync_config_colors(self):
@@ -1799,14 +1986,11 @@ class SkiNotebook(ttk.Frame):
             
         bg_color = self._get_notebook_tab_background()
         
-        # Update canvas background
         self._config_canvas.configure(bg=bg_color)
         
-        # Update inner frame background
         if hasattr(self, '_config_inner'):
             self._config_inner.configure(bg=bg_color)
         
-        # Update all child widgets in config inner that support bg
         if hasattr(self, '_config_inner'):
             for widget in self._config_inner.winfo_children():
                 try:
@@ -1814,18 +1998,33 @@ class SkiNotebook(ttk.Frame):
                 except tk.TclError:
                     pass
 
+    def _update_config_icon_entries(self):
+        """Update config tab icon entry fields when icons are changed."""
+        if not hasattr(self, "_config_inner"):
+            return
+        
+        # Find and update lock/unlock/status icon entries if they exist
+        for widget in self._config_inner.winfo_children():
+            if isinstance(widget, ttk.LabelFrame) and widget.cget("text") == "Icon Settings":
+                for child in widget.winfo_children():
+                    if isinstance(child, ttk.Frame):
+                        for entry in child.winfo_children():
+                            if isinstance(entry, SkiEntry):
+                                # Check variable name or position to determine which entry
+                                var = entry.cget("textvariable")
+                                if var and hasattr(var, 'get'):
+                                    # This won't work directly, need different approach
+                                    pass
+
     # ==========================================================================
-    # VISIBILITY LOGIC (LOCKED ALWAYS VISIBLE + SLIDING UNLOCKED WINDOW)
+    # VISIBILITY LOGIC
     # ==========================================================================
 
     def _unlocked_tabs(self):
         return [t for t in self._user_tabs if not self._is_locked(t)]
 
     def _clamp_unlock_scroll(self):
-        """
-        After lock/unlock or structural changes, keep _unlock_scroll valid.
-        NEVER recenter; only clamp to [0, max_start].
-        """
+        """Keep _unlock_scroll valid after lock/unlock or structural changes."""
         unlocked = self._unlocked_tabs()
         n_unlocked = len(unlocked)
         locked_count = self._locked_count()
@@ -1849,7 +2048,6 @@ class SkiNotebook(ttk.Frame):
 
         visible_unlocked_ids = set(unlocked[start:end])
 
-        # Show/hide user tabs
         for tid in self._user_tabs:
             if self._is_locked(tid):
                 try:
@@ -1867,7 +2065,6 @@ class SkiNotebook(ttk.Frame):
                 except tk.TclError:
                     pass
 
-        # Arrows / config visibility
         show_left = start > 0
         show_right = end < n_unlocked
 
@@ -1883,7 +2080,6 @@ class SkiNotebook(ttk.Frame):
                 except tk.TclError:
                     pass
 
-        # Config tab: if enabled, always keep visible
         if self._config_tab_enabled and self._config_tab_id is not None:
             try:
                 self.notebook.tab(self._config_tab_id, state="normal")
@@ -1905,7 +2101,7 @@ class SkiNotebook(ttk.Frame):
         self._apply_visibility_window(reason)
 
     # ==========================================================================
-    # ARROW CLICKS (ONLY THING THAT MOVES THE SCROLL INTENTIONALLY)
+    # ARROW CLICKS
     # ==========================================================================
 
     def _on_arrow_click(self, direction):
@@ -1915,7 +2111,7 @@ class SkiNotebook(ttk.Frame):
         room = max(self._max_tabs_visible - locked_count, 0)
 
         if room <= 0 or n_unlocked <= room:
-            return  # nothing to scroll
+            return
 
         start = self._unlock_scroll
         end = min(start + room, n_unlocked)
@@ -1932,12 +2128,9 @@ class SkiNotebook(ttk.Frame):
         self._unlock_scroll = new_start
         self._apply_visibility_window("ArrowScroll")
         
-        # Recalculate auto max after arrow move (visible tabs changed)
         if self._auto_max_tabs:
             self._recalculate_auto_max_tabs()
 
-        # If current tab got scrolled out of view, move selection to nearest visible unlocked tab.
-        # Locked tabs never force a selection change.
         if not self._last_user_tab or self._is_locked(self._last_user_tab):
             if unlocked and new_start < n_unlocked:
                 target = unlocked[new_start]
@@ -1982,9 +2175,10 @@ class SkiNotebook(ttk.Frame):
             self._last_user_tab = current
 
     def add(self, child, **kw):
-        raw_tid = self.notebook.add(child, **kw)
+        text = kw.pop('text', 'Tab')
+        raw_tid = self.notebook.add(child, text=text, **kw)
         all_tabs = self.notebook.tabs()
-        tid = all_tabs[-1] if all_tabs else raw_id
+        tid = all_tabs[-1] if all_tabs else raw_tid
         self._child_to_tab[child] = tid
 
         self._ensure_in_user_tabs(tid)
@@ -1994,7 +2188,6 @@ class SkiNotebook(ttk.Frame):
 
         self._refresh_visibility_from_selection("AfterAdd")
         
-        # FORCE recalculate on every add when auto_max_tabs is enabled
         if self._auto_max_tabs:
             self._recalculate_auto_max_tabs()
             
@@ -2031,10 +2224,11 @@ class SkiNotebook(ttk.Frame):
         return [t for t in all_tabs if not self._is_special(t)]
 
     def insert(self, index, child, **kw):
+        text = kw.pop('text', 'Tab')
         real_index = self._user_index_to_notebook_index(index)
-        raw_tid = self.notebook.insert(real_index, child, **kw)
+        raw_tid = self.notebook.insert(real_index, child, text=text, **kw)
         all_tabs = self.notebook.tabs()
-        tid = all_tabs[-1] if all_tabs else raw_id
+        tid = all_tabs[-1] if all_tabs else raw_tid
         self._child_to_tab[child] = tid
 
         if isinstance(index, str):
@@ -2053,7 +2247,6 @@ class SkiNotebook(ttk.Frame):
 
         self._refresh_visibility_from_selection("AfterInsert")
         
-        # FORCE recalculate on every insert when auto_max_tabs is enabled
         if self._auto_max_tabs:
             self._recalculate_auto_max_tabs()
             
@@ -2062,9 +2255,15 @@ class SkiNotebook(ttk.Frame):
         return tid
 
     def remove(self, s):
+        """Remove a tab. Returns False if tab is locked (cannot be removed)."""
         tid = self._normalize_tab_id(s)
         if tid is None or self._is_special(tid):
-            return
+            return False
+        
+        # Locked tabs cannot be removed via remove()
+        if self._is_locked(tid):
+            return False
+            
         try:
             child = self.notebook.tab(tid, "child")
             self._child_to_tab.pop(child, None)
@@ -2082,23 +2281,28 @@ class SkiNotebook(ttk.Frame):
         self._clamp_unlock_scroll()
         self._apply_visibility_window("AfterRemove")
         
-        # FORCE recalculate on every remove when auto_max_tabs is enabled
         if self._auto_max_tabs:
             self._recalculate_auto_max_tabs()
             
         if self._config_tab_enabled and hasattr(self, "_config_inner"):
             self._refresh_config_items()
+            
+        return True
 
     def forget(self, s):
         tid = self._normalize_tab_id(s)
         if tid is None or self._is_special(tid):
-            return
+            return False
+        
+        # Locked tabs cannot be forgotten via forget()
+        if self._is_locked(tid):
+            return False
+            
         try:
-            child = self.notebook.tab(tid, "child")
-            self._child_to_tab.pop(child, None)
             self.notebook.forget(tid)
         except tk.TclError:
             pass
+            
         removed_was_last = self._last_user_tab == tid
         self._user_tabs = [t for t in self._user_tabs if t != tid]
         self._tab_configs.pop(tid, None)
@@ -2110,12 +2314,13 @@ class SkiNotebook(ttk.Frame):
         self._clamp_unlock_scroll()
         self._apply_visibility_window("AfterForget")
         
-        # FORCE recalculate on every forget when auto_max_tabs is enabled
         if self._auto_max_tabs:
             self._recalculate_auto_max_tabs()
             
         if self._config_tab_enabled and hasattr(self, "_config_inner"):
             self._refresh_config_items()
+            
+        return True
 
     def tab(self, *args, **kwargs):
         """
@@ -2124,6 +2329,7 @@ class SkiNotebook(ttk.Frame):
           - tab(tab_id, option)       -> query single option
           - tab(tab_id, opt=val, ...) -> set option(s) and return ""
         Supports int index from .index(), widget child, or tab id.
+        When setting 'text', it sets the base_name only.
         """
         if len(args) == 0 and "tab_id" in kwargs:
             tid_arg = kwargs.pop("tab_id")
@@ -2139,59 +2345,58 @@ class SkiNotebook(ttk.Frame):
         if self._is_special(real_tid):
             return {}
 
-        # Ensure our internal config stays in sync when 'text' is changed externally
         opts_to_set = {k: v for k, v in kwargs.items()}
         query_option = None
 
         if len(args) >= 2 and not kwargs:
-            # Query mode: tab(tab_id, option)
             query_option = args[1]
         elif kwargs or (len(args) >= 2):
-            # If any keyword options are present, this is set mode.
             pass
 
         if query_option is not None:
-            # Pure query
+            # Query mode: if querying 'text', return base_name only
+            if query_option == "text":
+                cfg = self._tab_configs.get(real_tid, {})
+                return cfg.get("name", "")
             result = self.notebook.tab(real_tid, query_option)
             return result
 
         if opts_to_set:
-            # Set mode: update internal config if 'text' is involved
+            # Set mode: handle 'text' specially to set base_name only
             if "text" in opts_to_set:
-                cfg = self._tab_configs.setdefault(real_tid, {"name": "", "locked": False})
+                cfg = self._tab_configs.setdefault(real_tid, {"name": "", "locked": False, "status": ""})
                 new_text = str(opts_to_set["text"])
-                cfg["name"] = new_text.lstrip("🔒 ").rstrip()
+                cfg["name"] = new_text
                 # Recalculate width for this tab
                 self._recalculate_tab_width(real_tid)
                 # Recalculate auto max when tab text changes
                 if self._auto_max_tabs:
                     self._recalculate_auto_max_tabs()
-            # Apply to underlying notebook
-            result = self.notebook.tab(real_tid, **opts_to_set)
+                # Remove 'text' from opts_to_set so we don't set it directly on notebook
+                del opts_to_set["text"]
+            
+            # Apply remaining options to underlying notebook
+            if opts_to_set:
+                result = self.notebook.tab(real_tid, **opts_to_set)
 
-            # Refresh our visible label using lock state + name
+            # Refresh our visible label using lock state + name + status
             self._apply_tab_label(real_tid)
-            return result
+            return ""
 
-        # No options at all: query all options
-        return self.notebook.tab(real_tid)
+        # No options at all: query all options (return base_name for 'text')
+        result = self.notebook.tab(real_tid)
+        cfg = self._tab_configs.get(real_tid, {})
+        result['text'] = cfg.get("name", "")
+        return result
 
     def index(self, tab_id=None):
-        """
-        Match ttk.Notebook.index(tab_id):
-          - tab_id can be:
-              * integer notebook index
-              * tab id string
-              * widget object that is the child of a tab
-          - Returns the NOTEBOOK-level index of that tab.
-        """
+        """Match ttk.Notebook.index(tab_id)."""
         if tab_id is not None:
             real_tid = self._normalize_tab_id(tab_id)
             if real_tid is None:
                 raise tk.TclError("invalid tab id")
             return self.notebook.index(real_tid)
 
-        # No argument: index of currently selected user tab
         sel = self.notebook.select()
         if sel is None or self._is_special(sel):
             if self._user_tabs:
@@ -2225,7 +2430,6 @@ class SkiNotebook(ttk.Frame):
                     self._last_user_tab = current
                 return self._last_user_tab
 
-            # Selecting a user tab never moves scroll unless it's currently hidden.
             if real_tid in self._user_tabs:
                 if not self._is_locked(real_tid):
                     unlocked = self._unlocked_tabs()
@@ -2238,9 +2442,7 @@ class SkiNotebook(ttk.Frame):
                     room = max(self._max_tabs_visible - locked_count, 0)
                     end = min(start + room, len(unlocked))
 
-                    # Only adjust scroll if tab is outside current window
                     if 0 <= idx_u < len(unlocked) and (idx_u < start or idx_u >= end):
-                        # Move minimally so that idx_u becomes visible
                         if idx_u < start:
                             self._unlock_scroll = idx_u
                         else:
@@ -2266,10 +2468,3 @@ class SkiNotebook(ttk.Frame):
             if result and result in self._user_tabs:
                 self._last_user_tab = result
             return self._last_user_tab
-
-# Use these special widgets as drop in replacements for the tk widget they are.
-# class SkiEntry(tk.Entry)
-# class SkiText(tk.Text)
-# class SkiCombobox(ttk.Combobox)
-# class SkiScale(tk.Scale) # Basically...
-# class SkiNotebook(ttk.notebook) # Basically...
