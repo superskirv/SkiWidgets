@@ -48,8 +48,8 @@ Tab Locking, you can lock tabs, forcing them to always be visible while you scro
 - Custom params
   - max_tabs_visible: Maximum visible user tabs visibile on the notebook, default 5.
   - auto_max_tabs: Enable automatic calculation for max tabs, default True.
-  - config_tab: Enables the config tab next to the left arrow tab, used to lock/unlock tabs and perform some very minor tab operations, default True
-  - debug_mode: Enables some very minor debug information on the config tab, may be useful for building the app, Default False
+  - config_tab: Enables the config tab next to the left arrow tab, used to lock/unlock tabs and perform some very minor tab operations, default False
+  - debug_mode: Enables some very minor debug information on the config tab, may be useful for building the app, default False
 
 - Custom Functions
   - Theres actually a bunch of custom functions, most of which are probably not needed. But here is the important ones.
@@ -58,7 +58,9 @@ Tab Locking, you can lock tabs, forcing them to always be visible while you scro
   - Set status emoji status emoji, notebook.set_tab_status(tab_id, string) or notebook.get_tab_status(tab_id)
 
 ## TODO:
-- SkiEntry, SkiText, SkiCombo: Need to add a "Cut" option to the right-click menu.
+- SkiEntry, SkiText, SkiCombo: Need to add a "Cut" and "Select All" option to the right-click menu.
+- SkiEntry, SkiText, SkiCombo: Need to fix rapid typing undo/redo history. So that quick typing counts as one change, and not each character.
+- SkiText: Need to correct undo/redo feature to not move/reset the scroll position, or return to the previous scroll position, unless its actually smaller. Need position tracking for scroll view.
 - SkiNotebook: May have some unknown issues. Still needs a lot of testing. Seems to be working in my test app.
 - SkiNotebook: Issues with starting up and having less tabs initially configured when auto_max_tabs is true and more tabs can be visible. They start hidden when they can clearly be displayed. Nearly any tab action will make them visible again or shrink/grow the tab space.
 - SkiNotebook: Issues with using -> arrow when tabs are being hidden and auto_max_tabs is true, when more tabs can be shown. This will hide the first tab, until you add more tabs to show the <-/-> arrows again and use them, or shrink the tab space.
